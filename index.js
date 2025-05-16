@@ -41,24 +41,19 @@ app.post('/generate', async (req, res) => {
   }
 
   // --- Формируем тело запроса для API Leonardo.Ai ---
-  // !!! ВАЖНО: ПРОВЕРЬ ЭТИ ПАРАМЕТРЫ ПО АКТУАЛЬНОЙ ОФИЦИАЛЬНОЙ ДОКУМЕНТАЦИИ LEONARDO.AI !!!
   const leonardoPayload = {
     prompt: prompt,
-    modelId: "de7d3faf-762f-48e0-b3b7-9d0ac3a3fcf3", // ID из примера для Phoenix. Убедись, что он актуален для тебя.
-                                                       // Если у тебя есть другой ID для Phoenix, используй его.
-                                                       // Если modelId не указать, Leonardo может использовать модель по умолчанию.
+    modelId: "de7d3faf-762f-48e0-b3b7-9d0ac3a3fcf3", // ID для Phoenix (из примера, который ты предоставил)
     width: parseInt(width, 10),
     height: parseInt(height, 10),
     num_images: 1,            // Генерируем 1 изображение
-    alchemy: true,            // Включаем Alchemy (часто нужно для presetStyle и promptMagic)
-    promptMagic: true,        // Для "enhance prompt: true".
-    // promptMagicVersion: "v3", // УТОЧНИ, нужна ли версия (например, "v2" или "v3") и какая актуальна.
-    presetStyle: 'DYNAMIC',   // Для стиля "Dynamic", когда alchemy: true.
-    // contrast: 3.5,         // Параметр из примера. Убедись, что он нужен и корректен для Phoenix + Alchemy + Dynamic.
-                              // Иногда вместо 'contrast' используется 'contrastRatio' (0.0-1.0).
-    // guidance_scale: 7,     // Общий параметр контроля промпта, можно добавить (обычно 5-10).
-                              // Проверь, не конфликтует ли он с alchemy/promptMagic.
-    // Другие параметры, которые могут быть полезны или необходимы...
+    alchemy: true,            // Как в примере
+    contrast: 3.5,            // Как в примере
+
+    // Используем styleUUID из примера и enhancePrompt: true согласно твоим пожеланиям
+    styleUUID: "111dc692-d470-4eec-b791-3475abac4c46", 
+    enhancePrompt: true       // Установлено в true
+                               // Убедись, что API Leonardo действительно ожидает параметр с именем "enhancePrompt"
   };
   // ----------------------------------------------------
 
@@ -78,15 +73,13 @@ app.post('/generate', async (req, res) => {
       }
     );
 
-    // Ожидаем, что Leonardo вернет ID задачи в такой структуре
     if (apiResponse.data && apiResponse.data.sdGenerationJob && apiResponse.data.sdGenerationJob.generationId) {
       const generationId = apiResponse.data.sdGenerationJob.generationId;
       console.log(`Leonardo AI job successfully started. Generation ID: ${generationId}`);
-      res.status(202).json({ generationId }); // Статус 202 Accepted, так как это асинхронная операция
+      res.status(202).json({ generationId }); // Статус 202 Accepted
     } else {
-      // Если структура ответа другая, но запрос успешен (статус 2xx)
       console.warn('Unexpected success response structure from Leonardo AI POST /generations:', apiResponse.data);
-      // Попытка найти URL, если он вдруг вернулся сразу (менее вероятно для /generations)
+      // Попытка найти URL, если он вдруг вернулся сразу
       let imageUrls = [];
       if (apiResponse.data && apiResponse.data.generations && Array.isArray(apiResponse.data.generations)) {
           apiResponse.data.generations.forEach(gen => {
@@ -97,7 +90,7 @@ app.post('/generate', async (req, res) => {
       }
       if (imageUrls.length > 0) {
           console.log('Leonardo AI returned image URL(s) directly in /generations response:', imageUrls[0]);
-          res.json({ url: imageUrls[0], status: 'COMPLETE_IMMEDIATELY' }); // Отправляем первый URL
+          res.json({ url: imageUrls[0], status: 'COMPLETE_IMMEDIATELY' });
       } else {
           res.status(500).json({ error: 'Unexpected response structure from image generation service after job start', details: apiResponse.data });
       }
@@ -129,7 +122,6 @@ app.get('/result/:id', async (req, res) => {
       }
     );
 
-    // Ожидаемая структура ответа от Leonardo API для getGenerationById
     const generationDetails = apiResponse.data && apiResponse.data.generations_by_pk;
 
     if (generationDetails) {
@@ -140,11 +132,10 @@ app.get('/result/:id', async (req, res) => {
         if (generationDetails.generated_images && Array.isArray(generationDetails.generated_images) && generationDetails.generated_images.length > 0) {
           const validImageUrls = generationDetails.generated_images
             .map(img => img.url)
-            .filter(url => url != null && url.startsWith('http')); // Убедимся, что URL действителен
+            .filter(url => url != null && url.startsWith('http'));
 
           if (validImageUrls.length > 0) {
             console.log(`Image(s) ready for ${generationId}:`, validImageUrls);
-            // Отправляем первый действительный URL, как ожидает твой Flutter-клиент
             res.json({ status: 'COMPLETE', url: validImageUrls[0], allUrls: validImageUrls });
           } else {
             console.error(`Generation COMPLETE for ${generationId} but no valid URLs found:`, generationDetails.generated_images);
@@ -156,19 +147,32 @@ app.get('/result/:id', async (req, res) => {
         }
       } else if (status === 'PENDING' || status === 'PROCESSING') {
         console.log(`Generation ${generationId} is still ${status}.`);
-        res.json({ status: status }); // Генерация еще не завершена
+        res.json({ status: status });
       } else if (status === 'FAILED') {
         const failureReason = generationDetails.failureReason || 'Unknown reason';
         console.error(`Leonardo AI generation FAILED for ID ${generationId}. Reason: ${failureReason}`, generationDetails);
         res.status(500).json({ status: 'FAILED', error: 'Image generation failed at Leonardo AI', details: failureReason });
       } else {
-        // Неизвестный или неожиданный статус
         console.warn(`Unknown or unexpected status for ${generationId}: ${status}`, generationDetails);
         res.status(500).json({ error: 'Unknown status or unexpected response from Leonardo AI (get result)', status: status, details: generationDetails });
       }
     } else {
-      console.error('Unexpected response structure from Leonardo AI GET /generations/:id (missing generations_by_pk):', apiResponse.data);
-      res.status(404).json({ error: 'Result not found or unexpected response structure from Leonardo AI (get result)', details: apiResponse.data });
+      // Если нет `generations_by_pk`, пробуем более общую структуру из документации "array of URL links"
+      let foundUrls = [];
+      if (apiResponse.data && apiResponse.data.generated_images && Array.isArray(apiResponse.data.generated_images)) {
+           foundUrls = apiResponse.data.generated_images.map(img => img.url).filter(url => url != null && url.startsWith('http'));
+      } else if (apiResponse.data && Array.isArray(apiResponse.data) && apiResponse.data.length > 0 && apiResponse.data[0].url) {
+           // Если сам ответ - это массив объектов изображений
+           foundUrls = apiResponse.data.map(img => img.url).filter(url => url != null && url.startsWith('http'));
+      }
+
+      if (foundUrls.length > 0) {
+          console.log(`Image(s) ready for ${generationId} (found via alternative/direct structure):`, foundUrls);
+          res.json({ status: 'COMPLETE', url: foundUrls[0], allUrls: foundUrls });
+      } else {
+          console.error('Unexpected response structure from Leonardo AI GET /generations/:id (missing generations_by_pk and direct URLs):', apiResponse.data);
+          res.status(404).json({ error: 'Result not found or unexpected response structure from Leonardo AI (get result)', details: apiResponse.data });
+      }
     }
 
   } catch (err) {
@@ -177,7 +181,7 @@ app.get('/result/:id', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000; // Render.com автоматически установит переменную PORT
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`LEOAPI Server successfully running on port ${PORT}`);
 });
