@@ -5,6 +5,16 @@ require('dotenv').config(); // Для локальной разработки с
 const app = express();
 app.use(express.json()); // Middleware для парсинга JSON-тела входящих запросов
 
+// Middleware для логирования всех запросов
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] MIDDLEWARE: Received request: ${req.method} ${req.originalUrl}`);
+  console.log('[MIDDLEWARE] Request Headers:', JSON.stringify(req.headers, null, 2));
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log('[MIDDLEWARE] Request Body:', JSON.stringify(req.body, null, 2));
+  }
+  next(); 
+});
+
 const LEONARDO_API_BASE_URL = 'https://cloud.leonardo.ai/api/rest/v1';
 
 // --- Хелперы для логирования и ответа ошибкой ---
