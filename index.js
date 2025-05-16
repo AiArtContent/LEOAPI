@@ -44,7 +44,7 @@ app.post('/generate', async (req, res) => {
   // !!! ВАЖНО: ПРОВЕРЬ ЭТИ ПАРАМЕТРЫ ПО АКТУАЛЬНОЙ ОФИЦИАЛЬНОЙ ДОКУМЕНТАЦИИ LEONARDO.AI !!!
   const leonardoPayload = {
     prompt: prompt,
-    // modelId: "de7d3faf-762f-48e0-b3b7-9d0ac3a3fcf3", // ID из примера для Phoenix. Убедись, что он актуален для тебя.
+    modelId: "de7d3faf-762f-48e0-b3b7-9d0ac3a3fcf3", // ID из примера для Phoenix. Убедись, что он актуален для тебя.
                                                        // Если у тебя есть другой ID для Phoenix, используй его.
                                                        // Если modelId не указать, Leonardo может использовать модель по умолчанию.
     width: parseInt(width, 10),
